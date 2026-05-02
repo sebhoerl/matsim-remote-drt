@@ -57,7 +57,7 @@ If you want to listen for the dispatching client on a specific port, you can pas
 
 ```bash
 # show the randomly chosen port
-cat scenario/output/drt_remote_port
+cat scenario/output/tmp/remote_port_drt
 ```
 
 ## Running a remote dispatcher
@@ -73,7 +73,7 @@ This starts a random dispatcher which randomly assigns pending requests to idle 
 On Linux, you can directly pass the port via the command line:
 
 ```bash
-uv run 01_random_dispatcher.py $(cat ../scenario/output/temp/remote_port_drt)
+uv run 01_random_dispatcher.py $(cat ../scenario/output/tmp/remote_port_drt)
 ```
 
 ## Analysis
