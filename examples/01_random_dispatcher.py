@@ -34,7 +34,7 @@ socket.send(json.dumps({
 pending_requests = []
 
 # We prepare some statistics for logging
-statistics = { "waiting": 0, "onboard": 0, "finished": 0, "idle_vehicles": 0 }
+statistics = { "waiting": 0, "rejected": 0, "onboard": 0, "finished": 0, "idle_vehicles": 0 }
 
 # Now start looping over the time steps
 while True:
@@ -76,7 +76,12 @@ while True:
                 statistics["onboard"] -= 1
                 statistics["finished"] += 1
 
-        # Fourth, we go through the vehicle and find those that are currently idle
+        # Fourth, we go through the simulator-side rejected requests if any
+        statistics["rejected"] += len(message["rejected"])
+        statistics["waiting"] -= len(message["rejected"])
+        pending_requests = [r for r in pending_requests if r["id"] not in message["rejected"]]
+
+        # Fifth, we go through the vehicle and find those that are currently idle
         unassigned_vehicles = []
         for vehicle in message["vehicles"]:
             if vehicle["state"] == "stay":

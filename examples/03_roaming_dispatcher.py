@@ -93,6 +93,8 @@ class Request(TypedDict):
     origin_link: str # origin link for constructing the stop sequence and detecting passing vehicles
     destination_link: str # destination link for constructing the stop sequence
 
+    vehicle: str # identifier of assigned vehicle
+
 class RoamingDispatcher:
     def __init__(self, socket: zmq.Socket):
         """Initialize the dispatcher"""
@@ -123,7 +125,7 @@ class RoamingDispatcher:
 
         # track statistics
         self.statistics = {
-            "pending": 0, "onboard": 0, "finished": 0, "max. occupancy": 0
+            "pending": 0, "rejected": 0, "onboard": 0, "finished": 0, "max. occupancy": 0
         }
 
         # random state
@@ -258,6 +260,27 @@ class RoamingDispatcher:
                 self.statistics["onboard"] -= 1
                 self.statistics["finished"] += 1
                 
+        # treat simulator-rejected requests if any
+        for request_id in state["rejected"]:
+            request: Request = self.requests[request_id]
+
+            # bookkeeping
+            self.statistics["pending"] -= 1
+            self.statistics["rejected"] += 1
+
+            # remove existing assignment
+            if request["vehicle"]:
+                vehicle: Vehicle = self.vehicles[request["vehicle"]]
+
+                assert request_id in vehicle["pickup"]
+                assert request_id in vehicle["dropoff"]
+                
+                vehicle["pickup"].remove(request_id)
+                vehicle["dropoff"].remove(request_id)
+
+            # remove
+            del self.requests[request_id]
+        
         # check for new incoming requests
         for request_data in state["submitted"]:
             self.requests[request_data["id"]] = Request(
@@ -265,6 +288,7 @@ class RoamingDispatcher:
                 assignable = True,
                 origin_link = request_data["originLink"],
                 destination_link = request_data["destinationLink"],
+                vehicle = None
             )
 
             self.statistics["pending"] += 1
@@ -325,6 +349,7 @@ class RoamingDispatcher:
 
                     # lock the request (fixed assignment)
                     request["assignable"] = False
+                    request["vehicle"] = vehicle["id"]
 
             # if the vehicle has no planned relocation link, reassign
             if vehicle["relocation_link"] is None:

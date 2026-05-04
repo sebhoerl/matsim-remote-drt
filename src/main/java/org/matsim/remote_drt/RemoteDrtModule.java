@@ -31,7 +31,7 @@ public class RemoteDrtModule extends AbstractModule {
                 Verify.verifyNotNull(drtConfig, "Cannot find DRT mode " + parameters.getMode()
                         + " although it is defined in remote dispatching.");
 
-                installOverridingQSimModule(new RemoteDrtQSimModeModule(drtConfig));
+                installOverridingQSimModule(new RemoteDrtQSimModeModule(drtConfig, parameters));
             }
         }
     }

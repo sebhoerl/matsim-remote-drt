@@ -18,10 +18,12 @@ import com.google.inject.Singleton;
 
 public class RemoteDrtQSimModeModule extends AbstractDvrpModeQSimModule {
     private final DrtConfigGroup drtConfig;
+    private final RemoteDrtModeParameters parameters;
 
-    public RemoteDrtQSimModeModule(DrtConfigGroup drtConfig) {
+    public RemoteDrtQSimModeModule(DrtConfigGroup drtConfig, RemoteDrtModeParameters parameters) {
         super(drtConfig.getMode());
         this.drtConfig = drtConfig;
+        this.parameters = parameters;
     }
 
     @Override
@@ -42,7 +44,8 @@ public class RemoteDrtQSimModeModule extends AbstractDvrpModeQSimModule {
                     travelTime, //
                     router, //
                     getter.get(EventsManager.class), //
-                    getMode(), drtConfig.getStopDuration());
+                    getMode(), drtConfig.getStopDuration(), //
+                    parameters.getUseAutomaticRejection());
         })).in(Singleton.class);
 
         addMobsimScopeEventHandlerBinding().to(modalKey(RemoteDispatchingOptimizer.class));

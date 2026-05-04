@@ -93,6 +93,8 @@ Each request is only communicated to the dispatcher once when it is submitted (s
 
 Ongoing pickups and dropoffs cannot be revoked. This is why their state is transmitted in the `state` already when the process has started, and also when it has ended.
 
+Requests that are not yet picked up may be auto-rejected by the simulator if the latest pickup time has passed. This happens if the simulator is started with `useAutomaticRejection`. In that case, the auto-rejected requests are contained in the `rejected` list.
+
 Fields:
 - `time` (*Real*): Current time of day (in seconds after start) in simulation
 - `vehicles` (*List[...]*): A list of vehicle objects
@@ -111,6 +113,7 @@ Fields:
   - `earliestPickupTime` (*Real*): Earliest time when the request wants to be picked up
   - `latestPickupTime` (*Real*): Latest time when the request wants to be picked up
   - `latestArrivalTime` (*Real*): Latest time when the request wants to be dropped off
+- `rejected` (*List[...]*): List of request IDs that have been rejected simulator-side
 - `pickups` (*List[...]*): A list of ongoing or finished pickups
   - `request` (*String*): Identifier of the picked up request
   - `vehicle` (*String*): Identifier of the picking up vehicle

@@ -45,7 +45,7 @@ public class RunSimulation {
 			IOException, InterruptedException {
 		CommandLine cmd = new CommandLine.Builder(args) //
 				.requireOptions("demand-path", "fleet-path", "network-path", "output-path") //
-				.allowOptions("threads", "port", "update-demand", "iterations") //
+				.allowOptions("threads", "port", "update-demand", "iterations", "use-automatic-rejection") //
 				.build();
 
 		// prepare configuration
@@ -142,10 +142,12 @@ public class RunSimulation {
 
 		// setup remote dispatcher
 		int remotePort = cmd.getOption("port").map(Integer::parseInt).orElse(0);
+		boolean useAutomaticRejection = cmd.getOption("use-automatic-rejection").map(Boolean::parseBoolean).orElse(false);
 
 		RemoteDrtModeParameters parameters = new RemoteDrtModeParameters();
 		parameters.setMode(drtConfig.getMode());
 		parameters.setPort(remotePort);
+		parameters.setUseAutomaticRejection(useAutomaticRejection);
 
 		RemoteDrtConfigGroup remoteConfig = new RemoteDrtConfigGroup();
 		config.addModule(remoteConfig);

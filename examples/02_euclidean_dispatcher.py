@@ -61,7 +61,7 @@ class EuclideanDispatcher:
 
         # track statistics
         self.statistics = {
-            "pending": 0, "rejected": 0, "assigned": 0, "onboard": 0, "finished": 0
+            "pending": 0, "rejected": 0, "onboard": 0, "finished": 0
         }
 
     def send_message(self, name, content = {}):
@@ -207,6 +207,14 @@ class EuclideanDispatcher:
                 # bookkeeping
                 self.statistics["onboard"] -= 1
                 self.statistics["finished"] += 1
+
+        # treat simulator-rejected requests if any
+        for request_id in state["rejected"]:
+            assert self.requests[request_id]["assignable"]
+            del self.requests[request_id]
+
+            self.statistics["pending"] -= 1
+            self.statistics["rejected"] += 1
 
         # check for new incoming requests
         for request_data in state["submitted"]:

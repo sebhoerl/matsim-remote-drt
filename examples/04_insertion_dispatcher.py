@@ -48,6 +48,9 @@ class Request(TypedDict):
     # whether already assigned or not
     assignable: bool 
 
+    # assigned vehicle
+    vehicle: "Vehicle"
+
     @staticmethod
     def create(data):
         return Request(
@@ -56,7 +59,8 @@ class Request(TypedDict):
             dropoff_link = data["destinationLink"],
             latest_pickup_time = data["latestPickupTime"],
             latest_dropoff_time = data["latestArrivalTime"],
-            assignable = True
+            assignable = True,
+            vehicle = None
         )
 
 class StopType(Enum):
@@ -94,6 +98,9 @@ class Vehicle(TypedDict):
     # whether is active or not
     active: bool
 
+    # capacity of the vehicle (fixed)
+    capacity: int
+
     @staticmethod
     def create(data):
         return Vehicle(
@@ -101,7 +108,8 @@ class Vehicle(TypedDict):
             link = data["startLink"],
             schedule = [],
             active = False,
-            diversion_time = 0.0
+            diversion_time = 0.0,
+            capacity = data["capacity"]
         )
 
 class Router:
@@ -221,6 +229,20 @@ class InsertionManager:
                     return False # shifting dropoff too far
         
         return True # did exit so far, so insertion looks good
+    
+    def calculate_capacity_constraint(self, vehicle: Vehicle):
+        feasible = [True]
+        occupancy = 0
+
+        for stop in vehicle["schedule"][::-1]:
+            if stop["type"] == StopType.DROPOFF:
+                occupancy += 1
+            elif stop["type"] == StopType.PICKUP:
+                occupancy -= 1
+
+            feasible.insert(0, occupancy < vehicle["capacity"])
+        
+        return feasible
 
     def find_insertions(self, vehicles: list[Vehicle], request: Request):
         insertions = []
@@ -234,8 +256,15 @@ class InsertionManager:
                 vehicle["schedule"].pop(0)
                 assert len(vehicle["schedule"]) == 0
 
+            # calculate capacity constraint lookup
+            capacity_constraint = self.calculate_capacity_constraint(vehicle)
+
             for pickup_index in range(len(vehicle["schedule"]) + 1):
                 # trying to insert pickup before pickup_index
+
+                if not capacity_constraint[pickup_index]:
+                    # already at full capacity at the point of insertion
+                    continue # try next index
 
                 is_pickup_start = pickup_index == 0
                 if is_pickup_start:
@@ -383,6 +412,9 @@ class InsertionManager:
             id = str(stop_index + 1)
         ))
 
+        # note the assignment
+        request["vehicle"] = insertion["vehicle"]
+
         return stop_index + 2
 
 class RelocationManager:
@@ -493,7 +525,7 @@ class InsertionDispatcher:
 
         # track statistics
         self.statistics = {
-            "pending": 0, "rejected": 0, "assigned": 0, "onboard": 0, "finished": 0
+            "pending": 0, "rejected": 0, "onboard": 0, "finished": 0
         }
 
         # relocation
@@ -606,6 +638,27 @@ class InsertionDispatcher:
 
                 self.statistics["onboard"] -= 1
                 self.statistics["finished"] += 1
+
+        # treat simulator-rejected requests if any
+        for request_id in state["rejected"]:
+            request: Request = self.requests[request_id]
+
+            if request["vehicle"]:
+                # there is already an assignment that we need to revoke
+                vehicle: Vehicle = request["vehicle"]
+
+                vehicle["schedule"] = [stop for stop in vehicle["schedule"]
+                    if stop["request"] != request]
+
+            # notify relocation
+            location = self.router.coordinates(request["pickup_link"])
+            self.relocation_manager.notify_rejection(location)
+
+            # bookkeeping
+            del self.requests[request_id]
+
+            self.statistics["pending"] -= 1
+            self.statistics["rejected"] += 1
                 
         # check for new incoming requests
         self.pending = []

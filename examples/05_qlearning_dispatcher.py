@@ -353,6 +353,14 @@ class EuclideanDispatcher:
                 self.statistics["onboard"] -= 1
                 self.statistics["finished"] += 1
 
+        # treat simulator-rejected requests if any
+        for request_id in state["rejected"]:
+            assert self.requests[request_id]["assignable"]
+            del self.requests[request_id]
+
+            self.statistics["pending"] -= 1
+            self.statistics["rejected"] += 1
+
         # check for new incoming requests
         for request_data in state["submitted"]:
             # initialize request

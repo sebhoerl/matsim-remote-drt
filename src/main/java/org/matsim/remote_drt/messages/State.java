@@ -51,4 +51,6 @@ public class State implements Message {
     }
 
     public List<Request> submitted = new LinkedList<>();
+
+    public List<String> rejected = new LinkedList<>();
 }

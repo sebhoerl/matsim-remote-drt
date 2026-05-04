@@ -68,11 +68,13 @@ public class RemoteDispatchingOptimizer
     private final EventsManager eventsManager;
     private final String mode;
     private final double defaultStopDuration;
+    private final boolean useAutomaticRejection;
 
     public RemoteDispatchingOptimizer(RemoteDispatchingManager manager,
             ScheduleTimingUpdater scheduleTimingUpdater,
             Fleet fleet, Network network, DrtTaskFactory taskFactory, TravelTime travelTime,
-            LeastCostPathCalculator router, EventsManager eventsManager, String mode, double defaultStopDuration) {
+            LeastCostPathCalculator router, EventsManager eventsManager, String mode, double defaultStopDuration,
+            boolean useAutomaticRejection) {
         this.manager = manager;
         this.scheduleTimingUpdater = scheduleTimingUpdater;
         this.fleet = fleet;
@@ -83,6 +85,7 @@ public class RemoteDispatchingOptimizer
         this.eventsManager = eventsManager;
         this.mode = mode;
         this.defaultStopDuration = defaultStopDuration;
+        this.useAutomaticRejection = useAutomaticRejection;
     }
 
     private double nextStep = Double.NEGATIVE_INFINITY;
@@ -108,12 +111,17 @@ public class RemoteDispatchingOptimizer
         }
     }
 
+    private IdMap<DvrpVehicle, Integer> vehicleOccupancy = new IdMap<>(DvrpVehicle.class);
     private IdMap<Request, Id<DvrpVehicle>> pickedUp = new IdMap<>(Request.class);
     private IdMap<Request, Id<DvrpVehicle>> droppedOff = new IdMap<>(Request.class);
 
     public Assignment update(double time) {
         State state = new State();
         state.time = time;
+
+        if (useAutomaticRejection) {
+            state.rejected = performAutomaticRejection(time);
+        }
 
         Map<Pair<Id<Request>, Id<DvrpVehicle>>, State.Pickup> pickupData = new HashMap<>();
         Map<Pair<Id<Request>, Id<DvrpVehicle>>, State.Dropoff> dropoffData = new HashMap<>();
@@ -152,6 +160,10 @@ public class RemoteDispatchingOptimizer
                         pickup.ongoing = true;
 
                         pickupData.put(Pair.of(requestId, vehicle.getId()), pickup);
+
+                        synchronized (requests) {
+                            requestEntries.get(requestId).autoRejectable = false;
+                        }
                     }
 
                     for (Id<Request> requestId : stopTask.getDropoffRequests().keySet()) {
@@ -272,6 +284,58 @@ public class RemoteDispatchingOptimizer
         return manager.performAssignment(state);
     }
 
+    private List<String> performAutomaticRejection(double now) {
+        Set<Id<Request>> automaticallyRejected = new HashSet<>();
+
+        for (var entry : requestEntries.entrySet()) {
+            if (entry.getValue().autoRejectable) {
+                AcceptedDrtRequest request = requests.get(entry.getKey());
+
+                if (now > request.getLatestStartTime()) {
+                    // list of cleanup
+                    automaticallyRejected.add(request.getId());
+
+                    eventsManager.processEvent(new PassengerRequestRejectedEvent(now, mode, request.getId(),
+                            requests.get(request.getId()).getPassengerIds(), "auto-reject"));
+
+                    // remove from stop sequences, we just keep the empty stops
+                    if (entry.getValue().pickupVehicleId != null) {
+                        Schedule schedule = fleet.getVehicles().get(entry.getValue().pickupVehicleId).getSchedule();
+                        for (Task task : schedule.getTasks()) {
+                            if (task instanceof DrtStopTask stopTask) {
+                                if (stopTask.getPickupRequests().containsKey(request.getId())) {
+                                    stopTask.removePickupRequest(request.getId());
+                                }
+                            }
+                        }
+                    }
+
+                    if (entry.getValue().dropoffVehicleId != null) {
+                        Schedule schedule = fleet.getVehicles().get(entry.getValue().pickupVehicleId).getSchedule();
+                        for (Task task : schedule.getTasks()) {
+                            if (task instanceof DrtStopTask stopTask) {
+                                if (stopTask.getDropoffRequests().containsKey(request.getId())) {
+                                    stopTask.removeDropoffRequest(request.getId());
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        List<String> result = new LinkedList<>();
+
+        for (Id<Request> requestId : automaticallyRejected) {
+            requests.remove(requestId);
+            requestEntries.remove(requestId);
+            result.add(requestId.toString());
+        }
+
+        Collections.sort(result);
+        return result;
+    }
+
     @Override
     public void nextTask(DvrpVehicle vehicle) {
         scheduleTimingUpdater.updateBeforeNextTask(vehicle);
@@ -283,11 +347,25 @@ public class RemoteDispatchingOptimizer
         synchronized (pickedUp) {
             pickedUp.put(event.getRequestId(), event.getVehicleId());
         }
+
+        synchronized (requests) {
+            requestEntries.get(event.getRequestId()).autoRejectable = false;
+        }
+
+        synchronized (vehicleOccupancy) {
+            int occupancy = vehicleOccupancy.compute(event.getVehicleId(), (id, val) -> {
+                return val == null ? 1 : val + 1;
+            });
+
+            Verify.verify(occupancy <= (int) fleet.getVehicles().get(event.getVehicleId()).getCapacity().getElement(0),
+                    "Capacity of vehicle " + event.getVehicleId() + " has been exceeded by picking up request "
+                            + event.getRequestId());
+        }
     }
 
     @Override
     public void handleEvent(PassengerDroppedOffEvent event) {
-        synchronized (pickedUp) {
+        synchronized (droppedOff) {
             droppedOff.put(event.getRequestId(), event.getVehicleId());
         }
 
@@ -295,12 +373,19 @@ public class RemoteDispatchingOptimizer
             requests.remove(event.getRequestId());
             requestEntries.remove(event.getRequestId());
         }
+
+        synchronized (vehicleOccupancy) {
+            vehicleOccupancy.compute(event.getVehicleId(), (id, val) -> {
+                return val - 1;
+            });
+        }
     }
 
     private class RequestEntry {
         Id<DvrpVehicle> pickupVehicleId;
         Id<DvrpVehicle> dropoffVehicleId;
         boolean scheduled = false;
+        boolean autoRejectable = true;
     }
 
     private IdMap<Request, RequestEntry> requestEntries = new IdMap<>(Request.class);
@@ -377,6 +462,9 @@ public class RemoteDispatchingOptimizer
         for (String rawRequestId : assignment.rejections) {
             Id<Request> requestId = Id.create(rawRequestId, Request.class);
 
+            Preconditions.checkState(requestEntries.containsKey(requestId),
+                    "Rejected request " + requestId + " doesn't exist anymore. Already rejected or dropped off?");
+
             Preconditions.checkState(requestEntries.get(requestId).pickupVehicleId == null,
                     "Request " + requestId + " is rejected but it is still assigned to vehicle "
                             + requestEntries.get(requestId).pickupVehicleId + " (onboard?)");
@@ -404,7 +492,7 @@ public class RemoteDispatchingOptimizer
                     // move to the next location
                     if (i == 0 && currentTask instanceof DriveTask driveTask) {
                         boolean needsDiversion = stop.route != null || driveTask.getPath().getToLink() != stopLink;
-                        
+
                         if (needsDiversion) {
                             // we need to divert the current drive
                             OnlineDriveTaskTracker tracker = (OnlineDriveTaskTracker) driveTask.getTaskTracker();
@@ -415,7 +503,8 @@ public class RemoteDispatchingOptimizer
                                         router,
                                         travelTime);
                             } else {
-                                Preconditions.checkArgument(stop.route.getFirst().equals(tracker.getDiversionPoint().link.getId().toString()));
+                                Preconditions.checkArgument(stop.route.getFirst()
+                                        .equals(tracker.getDiversionPoint().link.getId().toString()));
                                 Preconditions.checkArgument(stop.route.getLast().equals(stop.link));
                                 path = createPath(stop.route, tracker.getDiversionPoint().time);
                             }
@@ -431,7 +520,8 @@ public class RemoteDispatchingOptimizer
                             path = VrpPaths.calcAndCreatePath(stayTask.getLink(), stopLink, currentTask.getEndTime(),
                                     router, travelTime);
                         } else {
-                            Preconditions.checkArgument(stop.route.getFirst().equals(stayTask.getLink().getId().toString()));
+                            Preconditions
+                                    .checkArgument(stop.route.getFirst().equals(stayTask.getLink().getId().toString()));
                             Preconditions.checkArgument(stop.route.getLast().equals(stop.link));
                             path = createPath(stop.route, stayTask.getEndTime());
                         }
