@@ -45,7 +45,8 @@ public class RunSimulation {
 			IOException, InterruptedException {
 		CommandLine cmd = new CommandLine.Builder(args) //
 				.requireOptions("demand-path", "fleet-path", "network-path", "output-path") //
-				.allowOptions("threads", "port", "update-demand", "iterations", "use-automatic-rejection") //
+				.allowOptions("threads", "port", "update-demand", "iterations", "use-automatic-rejection",
+						"maximum-detour-factor", "maximum-wait-time") //
 				.build();
 
 		// prepare configuration
@@ -102,8 +103,9 @@ public class RunSimulation {
 		DrtConfigGroup drtConfig = new DrtConfigGroup();
 		MultiModeDrtConfigGroup.get(config).addDrtConfigGroup(drtConfig);
 
+		final double stopDuration = 30.0;
 		drtConfig.setVehiclesFile(cmd.getOptionStrict("fleet-path"));
-		drtConfig.setStopDuration(30.0);
+		drtConfig.setStopDuration(stopDuration);
 
 		DrtInsertionSearchParams searchParams = new ExtensiveInsertionSearchParams();
 		drtConfig.addParameterSet(searchParams);
@@ -113,9 +115,15 @@ public class RunSimulation {
 				.addOrGetDefaultDrtOptimizationConstraintsSet();
 
 		// service characteristics during routing
-		constraints.setMaxWaitTime(300.0);
-		constraints.setMaxTravelTimeAlpha(1.5);
-		constraints.setMaxTravelTimeBeta(300.0);
+		final double defaultMaximumDetourFactor = 1.5;
+		final double defaultMaximumWaitTime = 300.0;
+
+		double maximumDetourFactor = cmd.getOption("maximum-detour-factor").map(Double::parseDouble).orElse(defaultMaximumDetourFactor);
+		double maximumWaitTime = cmd.getOption("maximum-wait-time").map(Double::parseDouble).orElse(defaultMaximumWaitTime);
+
+		constraints.setMaxWaitTime(maximumWaitTime + stopDuration);
+		constraints.setMaxTravelTimeAlpha(maximumDetourFactor);
+		constraints.setMaxTravelTimeBeta(maximumWaitTime + stopDuration);
 
 		DrtConfigs.adjustMultiModeDrtConfig(MultiModeDrtConfigGroup.get(config), config.scoring(), config.routing());
 
@@ -142,7 +150,8 @@ public class RunSimulation {
 
 		// setup remote dispatcher
 		int remotePort = cmd.getOption("port").map(Integer::parseInt).orElse(0);
-		boolean useAutomaticRejection = cmd.getOption("use-automatic-rejection").map(Boolean::parseBoolean).orElse(false);
+		boolean useAutomaticRejection = cmd.getOption("use-automatic-rejection").map(Boolean::parseBoolean)
+				.orElse(false);
 
 		RemoteDrtModeParameters parameters = new RemoteDrtModeParameters();
 		parameters.setMode(drtConfig.getMode());
