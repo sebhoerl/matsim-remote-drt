@@ -96,7 +96,13 @@ public class RemoteDispatchingManager
 
     private Message read() {
         try {
-            return mapper.readValue(socket.recv(), Message.class);
+            byte[] message = socket.recv();
+
+            if (message == null) {
+                throw new IOException("Received 'null' from algorithm. Communication seems to have ended unexpectedly.");
+            }
+
+            return mapper.readValue(message, Message.class);
         } catch (IOException e) {
             ErrorMessage message = new ErrorMessage();
             message.type = ErrorMessage.Type.Format;
