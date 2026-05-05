@@ -93,6 +93,8 @@ Each request is only communicated to the dispatcher once when it is submitted (s
 
 Ongoing pickups and dropoffs cannot be revoked. This is why their state is transmitted in the `state` already when the process has started, and also when it has ended.
 
+Additionally, each vehicle has a list of `onboard` requests that indicates both requests that have already been picked up and those that are currently being picked up (but which cannot be revoked anymore).
+
 Requests that are not yet picked up may be auto-rejected by the simulator if the latest pickup time has passed. This happens if the simulator is started with `useAutomaticRejection`. In that case, the auto-rejected requests are contained in the `rejected` list.
 
 Fields:
@@ -106,6 +108,7 @@ Fields:
   - `state` (*Enum[stay, stop, drive, inactive]*): The current state of the vehicle
   - `ongoing` (*List[String]*): A list of identiifers of ongoing stops (see `assignment`)
   - `finished` (*List[String]*): A list of identiifers of ongoing stops (see `assignment`)
+  - `onboard` (*List[String]*): A list of request identifiers that are currently onboard or currently being picked up
 - `submitted` (*List[...]*): A list of newly submitted requests since the last state update
   - `id` (*String*): Identifier of the request
   - `originLink` (*String*): Identifier of the request's origin link
@@ -143,7 +146,8 @@ Example:
             "diversionLink": "513", 
             "diversionTime": 7211.0, 
             "state": "drive",
-            "finished": ["pu2"]
+            "finished": ["pu2"],
+            "onboard": ["req2", "req23"]
         }
     ],
     "submitted": [

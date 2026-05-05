@@ -34,6 +34,8 @@ public class State implements Message {
 
         public List<String> ongoing = new LinkedList<>();
         public List<String> finished = new LinkedList<>();
+
+        public List<String> onboard = new LinkedList<>();
     }
 
     public List<Vehicle> vehicles = new LinkedList<>();

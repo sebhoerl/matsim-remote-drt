@@ -86,6 +86,10 @@ public class RemoteDispatchingOptimizer
         this.mode = mode;
         this.defaultStopDuration = defaultStopDuration;
         this.useAutomaticRejection = useAutomaticRejection;
+
+        for (Id<DvrpVehicle> vehicleId : fleet.getVehicles().keySet()) {
+            onboard.put(vehicleId, new HashSet<>());
+        }
     }
 
     private double nextStep = Double.NEGATIVE_INFINITY;
@@ -112,6 +116,8 @@ public class RemoteDispatchingOptimizer
     }
 
     private IdMap<DvrpVehicle, Integer> vehicleOccupancy = new IdMap<>(DvrpVehicle.class);
+    private IdMap<DvrpVehicle, Set<Id<Request>>> onboard = new IdMap<>(DvrpVehicle.class);
+    
     private IdMap<Request, Id<DvrpVehicle>> pickedUp = new IdMap<>(Request.class);
     private IdMap<Request, Id<DvrpVehicle>> droppedOff = new IdMap<>(Request.class);
 
@@ -164,6 +170,8 @@ public class RemoteDispatchingOptimizer
                         synchronized (requests) {
                             requestEntries.get(requestId).autoRejectable = false;
                         }
+
+                        onboard.get(vehicle.getId()).add(requestId);
                     }
 
                     for (Id<Request> requestId : stopTask.getDropoffRequests().keySet()) {
@@ -231,6 +239,10 @@ public class RemoteDispatchingOptimizer
                 if (isOngoing) {
                     vehicleState.ongoing.add(stopId);
                 }
+            }
+
+            for (Id<Request> requestId : onboard.get(vehicle.getId())) {
+                vehicleState.onboard.add(requestId.toString());
             }
         }
 
@@ -346,6 +358,7 @@ public class RemoteDispatchingOptimizer
     public void handleEvent(PassengerPickedUpEvent event) {
         synchronized (pickedUp) {
             pickedUp.put(event.getRequestId(), event.getVehicleId());
+            onboard.get(event.getVehicleId()).add(event.getRequestId());
         }
 
         synchronized (requests) {
@@ -367,6 +380,7 @@ public class RemoteDispatchingOptimizer
     public void handleEvent(PassengerDroppedOffEvent event) {
         synchronized (droppedOff) {
             droppedOff.put(event.getRequestId(), event.getVehicleId());
+            onboard.get(event.getVehicleId()).remove(event.getRequestId());
         }
 
         synchronized (requests) {
