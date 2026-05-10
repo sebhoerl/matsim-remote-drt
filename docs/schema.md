@@ -116,6 +116,8 @@ Fields:
   - `earliestPickupTime` (*Real*): Earliest time when the request wants to be picked up
   - `latestPickupTime` (*Real*): Latest time when the request wants to be picked up
   - `latestArrivalTime` (*Real*): Latest time when the request wants to be dropped off
+  - `pickupDuration` (*Real*): Duration (in s) that the pickup will take after vehicle arrival
+  - `dropoffDuration` (*Real*): Duration (in s) that the dropoff will take after vehicle arrival
 - `rejected` (*List[...]*): List of request IDs that have been rejected simulator-side
 - `pickups` (*List[...]*): A list of ongoing or finished pickups
   - `request` (*String*): Identifier of the picked up request
@@ -157,7 +159,9 @@ Example:
             "destinationLink": "8573",
             "earliestPickupTime": 0.0,
             "latestPickupTime": 7300.0,
-            "latestArrivalTime": 8000.0
+            "latestArrivalTime": 8000.0,
+            "pickupDuration": 30.0,
+            "dropoffDuration": 0.0
         }
     ]
 }
@@ -181,6 +185,7 @@ Fields:
   - `route` (*List[String]*, Optional): A custom route from the previous location of the vehicle to the indicated `link` as a sequence of link identifiers.
   - `id` (*String*, Optional): A custom identifier of the stop to track its progress (see `state`)
   - `earliestStartTime` (*Real*, default `-Inf`): Defines the earliest start time of the stop (which might incur a wait time at the link location).
+  - `stopDuration` (*Real*, default 0): Defines the duration of the stop. The effective duration will always be defined by the assigned pickups and dropoffs (and their duration) and will be at least one second. If it is longer, the provided value will be used.
 
 ## Utility backend
 

@@ -67,7 +67,8 @@ public class RemoteDispatchingOptimizer
     private final LeastCostPathCalculator router;
     private final EventsManager eventsManager;
     private final String mode;
-    private final double defaultStopDuration;
+    private final double defaultPickupDuration;
+    private final double defaultDropoffDuration = 1.0;
     private final boolean useAutomaticRejection;
 
     public RemoteDispatchingOptimizer(RemoteDispatchingManager manager,
@@ -84,7 +85,7 @@ public class RemoteDispatchingOptimizer
         this.router = router;
         this.eventsManager = eventsManager;
         this.mode = mode;
-        this.defaultStopDuration = defaultStopDuration;
+        this.defaultPickupDuration = defaultStopDuration;
         this.useAutomaticRejection = useAutomaticRejection;
 
         for (Id<DvrpVehicle> vehicleId : fleet.getVehicles().keySet()) {
@@ -117,7 +118,7 @@ public class RemoteDispatchingOptimizer
 
     private IdMap<DvrpVehicle, Integer> vehicleOccupancy = new IdMap<>(DvrpVehicle.class);
     private IdMap<DvrpVehicle, Set<Id<Request>>> onboard = new IdMap<>(DvrpVehicle.class);
-    
+
     private IdMap<Request, Id<DvrpVehicle>> pickedUp = new IdMap<>(Request.class);
     private IdMap<Request, Id<DvrpVehicle>> droppedOff = new IdMap<>(Request.class);
 
@@ -259,6 +260,9 @@ public class RemoteDispatchingOptimizer
             requestState.earliestPickupTime = drtRequest.getConstraints().earliestStartTime();
             requestState.latestPickupTime = drtRequest.getConstraints().latestStartTime();
             requestState.latestArrivalTime = drtRequest.getConstraints().latestArrivalTime();
+
+            requestState.pickupDuration = defaultPickupDuration;
+            requestState.dropoffDuration = defaultDropoffDuration;
 
             AcceptedDrtRequest acceptedRequest = AcceptedDrtRequest.createFromOriginalRequest(drtRequest);
             requests.put(request.getId(), acceptedRequest);
@@ -550,7 +554,7 @@ public class RemoteDispatchingOptimizer
                     // insert a potential wait before the next stop
                     if (currentTask.getEndTime() < stop.earliestStartTime) {
                         double beginTime = currentTask.getEndTime();
-                        double endTime = stop.earliestStartTime;
+                        double endTime = Math.max(beginTime + 1, stop.earliestStartTime);
 
                         DrtStayTask stayTask = taskFactory.createStayTask(vehicle, beginTime, endTime, stopLink);
                         schedule.addTask(stayTask);
@@ -563,10 +567,17 @@ public class RemoteDispatchingOptimizer
                     if (stop.pickup.size() > 0 || stop.dropoff.size() > 0) {
                         double beginTime = currentTask.getEndTime();
 
-                        double stopDuration = defaultStopDuration;
-                        if (stop.stopDuration >= 0) {
-                            stopDuration = stop.stopDuration;
+                        double stopDuration = 1.0; // at least one second, technically at least one time step
+
+                        if (stop.pickup.size() > 0) {
+                            stopDuration = Math.max(stopDuration, defaultPickupDuration);
                         }
+
+                        if (stop.dropoff.size() > 0) {
+                            stopDuration = Math.max(stopDuration, defaultDropoffDuration);
+                        }
+
+                        stopDuration = Math.max(stopDuration, stop.stopDuration);
 
                         double endTime = beginTime + stopDuration;
 
@@ -576,7 +587,7 @@ public class RemoteDispatchingOptimizer
                             AcceptedDrtRequest request = requests.get(Id.create(pickupId, Request.class));
 
                             Preconditions.checkNotNull(request,
-                                    "Request " + pickupId + " is assdigned for pickup to vehicle " + vehicle.getId()
+                                    "Request " + pickupId + " is assigned for pickup to vehicle " + vehicle.getId()
                                             + " but does not exist anymore (rejeced? / done?)");
 
                             stopTask.addPickupRequest(request);
@@ -594,7 +605,7 @@ public class RemoteDispatchingOptimizer
                             AcceptedDrtRequest request = requests.get(Id.create(dropoffId, Request.class));
 
                             Preconditions.checkNotNull(request,
-                                    "Request " + dropoffId + " is assdigned for pickup to vehicle " + vehicle.getId()
+                                    "Request " + dropoffId + " is assigned for pickup to vehicle " + vehicle.getId()
                                             + " but does not exist anymore (dropped off?)");
 
                             stopTask.addDropoffRequest(request);
@@ -604,6 +615,7 @@ public class RemoteDispatchingOptimizer
                                             + vehicle.getId()
                                             + " but is already assigned to vehicle "
                                             + requestEntries.get(request.getId()).dropoffVehicleId);
+
                             requestEntries.get(request.getId()).dropoffVehicleId = vehicle.getId();
                         }
 

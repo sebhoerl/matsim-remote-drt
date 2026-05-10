@@ -49,6 +49,9 @@ public class State implements Message {
         public double latestPickupTime;
         public double latestArrivalTime; // TODO Rename dropoff
 
+        public double pickupDuration;
+        public double dropoffDuration;
+
         final public int size = 1;
     }
 

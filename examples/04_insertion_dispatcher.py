@@ -45,6 +45,10 @@ class Request(TypedDict):
     latest_pickup_time: float
     latest_dropoff_time: float
 
+    #timing
+    pickup_duration: float
+    dropoff_duration: float
+
     # whether already assigned or not
     assignable: bool 
 
@@ -60,7 +64,9 @@ class Request(TypedDict):
             latest_pickup_time = data["latestPickupTime"],
             latest_dropoff_time = data["latestArrivalTime"],
             assignable = True,
-            vehicle = None
+            vehicle = None,
+            pickup_duration = data["pickupDuration"],
+            dropoff_duration = data["dropoffDuration"]
         )
 
 class StopType(Enum):
@@ -81,6 +87,7 @@ class Stop(TypedDict):
     # where and when
     link: str
     arrival_time: float
+    duration: float
 
 class Vehicle(TypedDict):
     # identification
@@ -206,9 +213,8 @@ class InsertionManager:
     """This class is used to generate feasible insertions into vehicle schedules and to apply them.
     """
 
-    def __init__(self, router: Router, stop_duration: float):
+    def __init__(self, router: Router):
         self.router = router
-        self.stop_duration = stop_duration
 
     def check_feasibility(self, sequence: list[Stop], index: int, delay: float):
         """Given a vehicle's stop sequence, this method checks whether an inertion at the given 
@@ -219,13 +225,11 @@ class InsertionManager:
             updated_arrival_time = stop["arrival_time"] + delay
 
             if stop["type"] == StopType.PICKUP:
-                # pickup at the end of the stop (after duration)
-                if updated_arrival_time + self.stop_duration > stop["request"]["latest_pickup_time"]:
+                if updated_arrival_time + stop["duration"] > stop["request"]["latest_pickup_time"]:
                     return False # shifting pickup too far
                 
             elif stop["type"] == StopType.DROPOFF:
-                # dropoff at the beginning of the stop (before duration)
-                if updated_arrival_time > stop["request"]["latest_dropoff_time"]:
+                if updated_arrival_time + stop["duration"] > stop["request"]["latest_dropoff_time"]:
                     return False # shifting dropoff too far
         
         return True # did exit so far, so insertion looks good
@@ -275,7 +279,7 @@ class InsertionManager:
                     # route to pickup starts at an existing stop
                     preceding_stop: Stop = vehicle["schedule"][pickup_index - 1]
                     pickup_preceding_link = preceding_stop["link"]
-                    pickup_preceding_departure_time = preceding_stop["arrival_time"] + self.stop_duration
+                    pickup_preceding_departure_time = preceding_stop["arrival_time"] + preceding_stop["duration"]
 
                 # initialize pickup information
                 pickup_link = request["pickup_link"]
@@ -287,11 +291,11 @@ class InsertionManager:
                 pickup_arrival_time = pickup_preceding_departure_time + to_pickup_travel_time
 
                 # pickup happens after the stop duration, check if it is feasible
-                if pickup_arrival_time + self.stop_duration > request["latest_pickup_time"]:
+                if pickup_arrival_time + request["pickup_duration"] > request["latest_pickup_time"]:
                     break # no need to explore further
 
                 # shift all following stops by the drive time plus stop duration
-                pickup_delay += to_pickup_travel_time + self.stop_duration
+                pickup_delay += to_pickup_travel_time + request["pickup_duration"]
 
                 # now check if the following stops are still feasible
                 if not self.check_feasibility(vehicle["schedule"], pickup_index, pickup_delay):
@@ -327,7 +331,7 @@ class InsertionManager:
                         # dropoff is after an existing stop
                         preceding_stop: Stop = vehicle["schedule"][dropoff_index - 1]
                         dropoff_preceding_link = preceding_stop["link"]
-                        dropoff_preceding_departure_time = preceding_stop["arrival_time"] + self.stop_duration + updated_pickup_delay
+                        dropoff_preceding_departure_time = preceding_stop["arrival_time"] + preceding_stop["duration"] + updated_pickup_delay
                     
                     # initialize dropoff information
                     dropoff_link = request["dropoff_link"]
@@ -343,7 +347,7 @@ class InsertionManager:
                         break # no need to explore further
 
                     # shift all following stops by the drive time plus stop duration
-                    dropoff_delay += to_dropoff_travel_time + self.stop_duration
+                    dropoff_delay += to_dropoff_travel_time + request["dropoff_duration"]
 
                     # check if dropoff is last stop
                     is_dropoff_end = dropoff_index == len(vehicle["schedule"])
@@ -400,7 +404,8 @@ class InsertionManager:
             request = request,
             link = request["pickup_link"],
             arrival_time = insertion["pickup_arrival_time"],
-            id = str(stop_index)
+            id = str(stop_index),
+            duration = request["pickup_duration"]
         ))
 
         # shift index by one since we already inserted the pickup
@@ -409,7 +414,8 @@ class InsertionManager:
             request = request,
             link = request["dropoff_link"],
             arrival_time = insertion["dropoff_arrival_time"],
-            id = str(stop_index + 1)
+            id = str(stop_index + 1),
+            duration = request["dropoff_duration"]
         ))
 
         # note the assignment
@@ -487,7 +493,9 @@ class RelocationManager:
                     # get the closest link to the coordinate
                     link = router.closest(destinations[destination_index]),
                     type = StopType.RELOCATION,
-                    id = str(stop_index)
+                    id = str(stop_index),
+                    arrival_time = 0.0, # not really relevant for relocation
+                    duration = 1.0
                 ))
 
                 stop_index += 1
@@ -513,11 +521,6 @@ class InsertionDispatcher:
         # an identifier. This way, we can remove stops from our local schedules as soon
         # as they are processed in the simulation.
         self.stop_index = 0
-
-        # each stop has a specific duration (simulator default)
-        # dropoffs happen at the beginning of a stop
-        # pickups happen at the end of a stop
-        self.stop_duration = 30.0
 
         # settings
         self.dispatching_interval = 30.0
@@ -694,8 +697,25 @@ class InsertionDispatcher:
             # update status
             vehicle["active"] = vehicle_data["state"] != "inactive"
 
+            # update schedule timing
+            self.update_schedule(state["time"], vehicle)
+
+    def update_schedule(self, now: float, vehicle: Vehicle):
+        if len(vehicle["schedule"]) > 0:
+            first_stop = vehicle["schedule"][0]
+
+            origin_link = vehicle["link"]
+            destination_link = first_stop["link"]
+
+            # see if we need to shift the first stop
+            travel_time = self.router.calculate_travel_time(origin_link, destination_link)
+            shift = now + travel_time - first_stop["arrival_time"]
+
+            for stop in vehicle["schedule"]:
+                stop["arrival_time"] += shift
+
     def perform_assignment(self, now):
-        insertion_manager = InsertionManager(self.router, self.stop_duration)
+        insertion_manager = InsertionManager(self.router)
 
         # find all active vehicles
         vehicles = [v for v in self.vehicles.values() if v["active"]]
