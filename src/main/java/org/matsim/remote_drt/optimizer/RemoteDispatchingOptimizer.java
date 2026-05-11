@@ -97,7 +97,10 @@ public class RemoteDispatchingOptimizer
 
     @Override
     public void notifyMobsimBeforeSimStep(@SuppressWarnings("rawtypes") MobsimBeforeSimStepEvent e) {
-        // if (!isFirstStep) {
+        if (useAutomaticRejection) {
+            automaticallyRejected.addAll(performAutomaticRejection(e.getSimulationTime()));
+        }
+
         if (e.getSimulationTime() >= nextStep) {
             Assignment assignment = update(e.getSimulationTime());
             nextStep = e.getSimulationTime() + assignment.waitFor;
@@ -116,6 +119,8 @@ public class RemoteDispatchingOptimizer
         }
     }
 
+    private List<String> automaticallyRejected = new LinkedList<>();
+
     private IdMap<DvrpVehicle, Integer> vehicleOccupancy = new IdMap<>(DvrpVehicle.class);
     private IdMap<DvrpVehicle, Set<Id<Request>>> onboard = new IdMap<>(DvrpVehicle.class);
 
@@ -126,9 +131,8 @@ public class RemoteDispatchingOptimizer
         State state = new State();
         state.time = time;
 
-        if (useAutomaticRejection) {
-            state.rejected = performAutomaticRejection(time);
-        }
+        state.rejected.addAll(automaticallyRejected);
+        automaticallyRejected.clear();
 
         Map<Pair<Id<Request>, Id<DvrpVehicle>>, State.Pickup> pickupData = new HashMap<>();
         Map<Pair<Id<Request>, Id<DvrpVehicle>>, State.Dropoff> dropoffData = new HashMap<>();
@@ -307,7 +311,7 @@ public class RemoteDispatchingOptimizer
             if (entry.getValue().autoRejectable) {
                 AcceptedDrtRequest request = requests.get(entry.getKey());
 
-                if (now > request.getLatestStartTime()) {
+                if (now > request.getLatestStartTime() - defaultPickupDuration) {
                     // list of cleanup
                     automaticallyRejected.add(request.getId());
 
