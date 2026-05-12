@@ -312,32 +312,52 @@ public class RemoteDispatchingOptimizer
                 AcceptedDrtRequest request = requests.get(entry.getKey());
 
                 if (now > request.getLatestStartTime() - defaultPickupDuration) {
-                    // list of cleanup
-                    automaticallyRejected.add(request.getId());
+                    DrtStopTask pickupTask = null;
+                    DrtStopTask dropoffTask = null;
 
-                    eventsManager.processEvent(new PassengerRequestRejectedEvent(now, mode, request.getId(),
-                            requests.get(request.getId()).getPassengerIds(), "auto-reject"));
+                    Preconditions.checkState(entry.getValue().pickupVehicleId == entry.getValue().dropoffVehicleId);
 
-                    // remove from stop sequences, we just keep the empty stops
                     if (entry.getValue().pickupVehicleId != null) {
                         Schedule schedule = fleet.getVehicles().get(entry.getValue().pickupVehicleId).getSchedule();
-                        for (Task task : schedule.getTasks()) {
+
+                        for (int k = schedule.getCurrentTask().getTaskIdx() + 1; k < schedule.getTaskCount(); k++) {
+                            // future tasks that are not executed yet
+                            Task task = schedule.getTasks().get(k);
+
                             if (task instanceof DrtStopTask stopTask) {
                                 if (stopTask.getPickupRequests().containsKey(request.getId())) {
-                                    stopTask.removePickupRequest(request.getId());
+                                    pickupTask = stopTask;
+                                }
+
+                                if (stopTask.getDropoffRequests().containsKey(request.getId())) {
+                                    dropoffTask = stopTask;
                                 }
                             }
                         }
                     }
 
-                    if (entry.getValue().dropoffVehicleId != null) {
-                        Schedule schedule = fleet.getVehicles().get(entry.getValue().pickupVehicleId).getSchedule();
-                        for (Task task : schedule.getTasks()) {
-                            if (task instanceof DrtStopTask stopTask) {
-                                if (stopTask.getDropoffRequests().containsKey(request.getId())) {
-                                    stopTask.removeDropoffRequest(request.getId());
-                                }
-                            }
+                    boolean rejectable = false;
+                    boolean cancel = false;
+
+                    if (pickupTask == null && dropoffTask == null) {
+                        // not yet assigned
+                        rejectable = true;
+                    } else if (pickupTask != null && dropoffTask != null) {
+                        // pickup can be canceled
+                        cancel = true;
+                        rejectable = true;
+                    }
+
+                    if (rejectable) {
+                        // list of cleanup
+                        automaticallyRejected.add(request.getId());
+
+                        eventsManager.processEvent(new PassengerRequestRejectedEvent(now, mode, request.getId(),
+                                requests.get(request.getId()).getPassengerIds(), "auto-reject"));
+
+                        if (cancel) {
+                            pickupTask.removePickupRequest(entry.getKey());
+                            dropoffTask.removeDropoffRequest(entry.getKey());
                         }
                     }
                 }
@@ -614,11 +634,23 @@ public class RemoteDispatchingOptimizer
 
                             stopTask.addDropoffRequest(request);
 
+                            Preconditions.checkState(requestEntries.get(request.getId()).pickupVehicleId != null,
+                                    "Request " + request.getId() + " is assigned for dropoff to vehicle "
+                                            + vehicle.getId()
+                                            + " but is not assigned for pickup to any vehicle.");
+
                             Preconditions.checkState(requestEntries.get(request.getId()).dropoffVehicleId == null,
                                     "Request " + request.getId() + " is assigned for dropoff to vehicle "
                                             + vehicle.getId()
                                             + " but is already assigned to vehicle "
                                             + requestEntries.get(request.getId()).dropoffVehicleId);
+
+                            Preconditions.checkState(
+                                    requestEntries.get(request.getId()).pickupVehicleId == vehicle.getId(),
+                                    "Request " + request.getId() + " is assigned for dropoff to vehicle "
+                                            + vehicle.getId()
+                                            + " but is assigned for pickup to different vehicle "
+                                            + requestEntries.get(request.getId()).pickupVehicleId);
 
                             requestEntries.get(request.getId()).dropoffVehicleId = vehicle.getId();
                         }
