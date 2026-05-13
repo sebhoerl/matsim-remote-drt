@@ -7,6 +7,9 @@ import numpy as np
 
 # %%
 
+def parse_time(time):
+    return np.dot(np.array(time.split(":")).astype(int), [3600, 60, 1])
+
 df = []
 
 for fleet_size in (10, 25, 50, 100):
@@ -25,13 +28,20 @@ for fleet_size in (10, 25, 50, 100):
                 rides = df_partial["rides"].values[0]
                 rejected = df_partial["rejections"].values[0]
 
+                with open(path / "stopwatch.csv") as f:
+                    df_time = pd.read_csv(f, sep = ";")
+                    start_time = parse_time(df_time["BEGIN iteration"].values[0])
+                    end_time = parse_time(df_time["END iteration"].values[0])
+                    runtime = end_time - start_time
+
                 df.append({
                     "requests": requests,
                     "fleet_size": fleet_size,
                     "dispatcher": dispatcher,
                     "rides": rides,
                     "acceptance": ok / (rides + rejected),
-                    "ok": ok
+                    "ok": ok,
+                    "runtime": runtime
                 })
 
             except FileNotFoundError:
@@ -43,4 +53,8 @@ df
 # %%
 
 px.line(df, x = "requests", y = "acceptance", color = "dispatcher", facet_col = "fleet_size")
+
+# %%
+
+px.line(df, x = "requests", y = "runtime", color = "dispatcher", facet_col = "fleet_size")
 

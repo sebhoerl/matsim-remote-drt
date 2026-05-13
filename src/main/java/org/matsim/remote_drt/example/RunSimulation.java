@@ -101,6 +101,8 @@ public class RunSimulation {
 
 		// configuration of DRT
 		DrtConfigGroup drtConfig = new DrtConfigGroup();
+		drtConfig.setNumberOfThreads(threads);
+		
 		MultiModeDrtConfigGroup.get(config).addDrtConfigGroup(drtConfig);
 
 		final double stopDuration = 30.0;
