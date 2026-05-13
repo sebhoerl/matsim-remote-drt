@@ -2,3 +2,6 @@ demand.xml
 fleet.xml
 output
 /output_*
+/check
+/batch
+/batch2
