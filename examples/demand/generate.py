@@ -17,8 +17,7 @@ define two peak hours around which we sample from a normal distribution.
 
 # %%%
 
-def main(attractors_path: Path = typer.Option(), output_path: Path = typer.Option(), requests: int = typer.Option(1000)):
-    random_seed = 42
+def main(attractors_path: Path = typer.Option(), output_path: Path = typer.Option(), requests: int = typer.Option(1000), seed: int = typer.Option(42)):
     spatial_sigma = 800 # m
 
     peaks = [
@@ -31,7 +30,7 @@ def main(attractors_path: Path = typer.Option(), output_path: Path = typer.Optio
     # %% Preparation
 
     # rng initialization
-    random = np.random.default_rng(random_seed)
+    random = np.random.default_rng(seed)
 
     # load attractors for structured demand
     df_attractors = gpd.read_file(attractors_path)
