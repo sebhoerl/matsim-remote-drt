@@ -4,6 +4,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 
+import org.apache.commons.lang3.exception.UncheckedException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.matsim.core.controler.events.IterationStartsEvent;
@@ -25,6 +26,7 @@ import org.matsim.remote_drt.services.manager.ServiceManager;
 import org.zeromq.SocketType;
 import org.zeromq.ZContext;
 import org.zeromq.ZMQ;
+import org.zeromq.ZMQException;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -110,6 +112,8 @@ public class RemoteDispatchingManager
             send(message);
 
             throw new UncheckedIOException(e);
+        } catch (ZMQException e) {
+            throw new UncheckedException(e);
         }
     }
 
@@ -118,6 +122,8 @@ public class RemoteDispatchingManager
             socket.send(mapper.writeValueAsBytes(message));
         } catch (IOException e) {
             throw new UncheckedIOException(e);
+        } catch (ZMQException e) {
+            throw new UncheckedException(e);
         }
     }
 
