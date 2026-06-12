@@ -44,7 +44,7 @@ The vehicles will be randomly distributed in the network.
 You can now start the simulation. For that, make sure to open this in one command windows and to later start the dispatcher in another one, so both proceses can run in parallel:
 
 ```bash
-# generates 1000 requests in scenario/demand.xml
+# runs the simulation
 java -cp target/remote-drt-*-SNAPSHOT.jar \
     org.matsim.remote_drt.example.RunSimulation \
     --network-path scenario/paris.xml.zst \
