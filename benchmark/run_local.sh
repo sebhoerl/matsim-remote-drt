@@ -16,6 +16,8 @@ if [ ! -f README.md ]; then
     exit 1
 fi
 
+mvn -Pstandalone clean package
+
 cd examples
 uv sync
 cd ..

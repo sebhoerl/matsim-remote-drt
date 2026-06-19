@@ -16,6 +16,8 @@ if [ ! -f README.md ]; then
     exit 1
 fi
 
+mamba run --live-stream -n dispatch mvn -Pstandalone clean package
+
 cd examples
 mamba run --live-stream -n dispatch uv sync
 cd ..
