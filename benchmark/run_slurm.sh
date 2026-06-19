@@ -24,10 +24,10 @@ cd ..
 
 learning_iterations=25
 
-for seed in 1000; do # 2000 3000 4000 5000; do
-    for fleet_size in 10 15; do # 20 25 50 100; do
-        for requests in 500 1000; do # 1500 2000 3000 4000 5000; do
-            for dispatcher in 02_euclidean; do # 04_insertion 05_qlearning; do
+for seed in 1000 2000 3000 4000 5000; do
+    for fleet_size in 10 15 20 25 50 100; do
+        for requests in 500 1000 1500 2000 3000 4000 5000; do
+            for dispatcher in 02_euclidean 04_insertion 05_qlearning; do
                 iterations=1
 
                 if [[ ${dispatcher} == *"learn"* ]]; then
