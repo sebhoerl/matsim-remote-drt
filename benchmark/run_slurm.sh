@@ -17,7 +17,7 @@ if [ ! -f README.md ]; then
 fi
 
 cd examples
-uv sync
+mamba run --live-stream -n dispatch uv sync
 cd ..
 
 learning_iterations=25
