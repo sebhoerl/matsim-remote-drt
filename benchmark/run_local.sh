@@ -20,7 +20,6 @@ cd examples
 uv sync
 cd ..
 
-exit
 learning_iterations=25
 
 for seed in 1000 2000 3000 4000 5000; do
