@@ -44,6 +44,8 @@ for seed in 1000 2000 3000 4000 5000; do
                         mamba run --live-stream -n dispatch \
                     bash benchmark/simulation.sh \
                         ${fleet_size} ${requests} ${dispatcher} ${iterations} ${seed}
+
+                    echo "submitted ${name}"
                 fi
             done
         done
