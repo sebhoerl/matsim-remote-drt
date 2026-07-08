@@ -22,7 +22,7 @@ cd examples
 mamba run --live-stream -n dispatch uv sync
 cd ..
 
-learning_iterations=25
+learning_iterations=100
 
 for seed in 1000 2000 3000 4000 5000; do
     for fleet_size in 10 15 20 25 50 100; do

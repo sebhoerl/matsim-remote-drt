@@ -27,7 +27,7 @@ for seed, fleet_size, requests, dispatcher in tqdm(tasks, total = total):
     iterations = 1
 
     if dispatcher == "05_qlearning":
-        iterations = 25
+        iterations = 100
 
     path = Path("../output/fs{}_req{}_disp{}_it{}_seed{}/simulation".format(fleet_size, requests, dispatcher, iterations, seed))
 
