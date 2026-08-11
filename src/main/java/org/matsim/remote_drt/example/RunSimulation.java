@@ -36,6 +36,7 @@ import org.matsim.core.scenario.ScenarioUtils;
 import org.matsim.remote_drt.RemoteDrtConfigGroup;
 import org.matsim.remote_drt.RemoteDrtModeParameters;
 import org.matsim.remote_drt.RemoteDrtModule;
+import org.matsim.remote_drt.example.dynamic.DynamicScenarioModule;
 
 import com.fasterxml.jackson.core.JsonGenerationException;
 import com.fasterxml.jackson.databind.JsonMappingException;
@@ -65,7 +66,12 @@ public class RunSimulation {
 		config.qsim().setNumberOfThreads(threads);
 
 		// set up input paths
-		config.plans().setInputFile(cmd.getOptionStrict("demand-path"));
+		String demandPath = cmd.getOptionStrict("demand-path");
+
+		if (!demandPath.contains("__it__")) {
+			config.plans().setInputFile(demandPath);
+		}
+
 		config.controller().setOutputDirectory(cmd.getOptionStrict("output-path"));
 		config.network().setInputFile(cmd.getOptionStrict("network-path"));
 
@@ -102,11 +108,16 @@ public class RunSimulation {
 		// configuration of DRT
 		DrtConfigGroup drtConfig = new DrtConfigGroup();
 		drtConfig.setNumberOfThreads(threads);
-		
+
 		MultiModeDrtConfigGroup.get(config).addDrtConfigGroup(drtConfig);
 
 		final double stopDuration = 30.0;
-		drtConfig.setVehiclesFile(cmd.getOptionStrict("fleet-path"));
+		String fleetPath = cmd.getOptionStrict("fleet-path");
+
+		if (!fleetPath.contains("__it__")) {
+			drtConfig.setVehiclesFile(fleetPath);
+		}
+
 		drtConfig.setStopDuration(stopDuration);
 
 		DrtInsertionSearchParams searchParams = new ExtensiveInsertionSearchParams();
@@ -120,8 +131,10 @@ public class RunSimulation {
 		final double defaultMaximumDetourFactor = 1.5;
 		final double defaultMaximumWaitTime = 300.0;
 
-		double maximumDetourFactor = cmd.getOption("maximum-detour-factor").map(Double::parseDouble).orElse(defaultMaximumDetourFactor);
-		double maximumWaitTime = cmd.getOption("maximum-wait-time").map(Double::parseDouble).orElse(defaultMaximumWaitTime);
+		double maximumDetourFactor = cmd.getOption("maximum-detour-factor").map(Double::parseDouble)
+				.orElse(defaultMaximumDetourFactor);
+		double maximumWaitTime = cmd.getOption("maximum-wait-time").map(Double::parseDouble)
+				.orElse(defaultMaximumWaitTime);
 
 		constraints.setMaxWaitTime(maximumWaitTime + stopDuration);
 		constraints.setMaxTravelTimeAlpha(maximumDetourFactor);
@@ -147,9 +160,6 @@ public class RunSimulation {
 		controller.configureQSimComponents(DvrpQSimComponents.activateAllModes(MultiModeDrtConfigGroup.get(config)));
 		setupFreespeedTravelTime(controller);
 
-		// optionally add scenario updater
-		setupScenarioUpdater(cmd, controller, drtConfig);
-
 		// setup remote dispatcher
 		int remotePort = cmd.getOption("port").map(Integer::parseInt).orElse(0);
 		boolean useAutomaticRejection = cmd.getOption("use-automatic-rejection").map(Boolean::parseBoolean)
@@ -165,15 +175,9 @@ public class RunSimulation {
 		remoteConfig.addModeParameters(parameters);
 
 		controller.addOverridingModule(new RemoteDrtModule());
+		controller.addOverridingModule(new DynamicScenarioModule(config, drtConfig, demandPath, fleetPath));
 
 		controller.run();
-	}
-
-	static private void setupScenarioUpdater(CommandLine cmd, Controller controller, DrtConfigGroup drtConfig) {
-		boolean updateDemand = cmd.getOption("update-demand").map(Boolean::parseBoolean).orElse(false);
-		if (updateDemand) {
-			controller.addOverridingModule(new ScenarioUpdaterModule(drtConfig));
-		}
 	}
 
 	static private void setupFreespeedTravelTime(Controller controller) {

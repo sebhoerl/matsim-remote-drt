@@ -1,0 +1,4 @@
+.venv
+analysis.parquet
+*.log
+*.pdf

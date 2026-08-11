@@ -4,7 +4,7 @@ This repository contains the remote dispatching interface for MATSim's DRT contr
 
 The interface is based on **ZeroMQ** for communication. All messages are exchanged in *json* format.
 
-See the [getting started](docs/getting_started.md) guide on how to run a simple Python dispatcher (with nothing else than the present repository).
+See the [getting started](docs/getting_started.md) guide on how to run a simple Python dispatcher (with nothing else than the present repository). The benchmarking tools in this repository also include [advanced features](docs/advanced.md) such as a more advanced demand generation mechanism and running noisy multi-iteration use cases for learning-based algorithms.
 
 See [examples of increasing complexity](examples) implemented in Python:
 - A simple random assignment dispatcher to introduce the framework

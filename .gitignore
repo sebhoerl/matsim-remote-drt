@@ -2,4 +2,3 @@
 target
 __pycache__
 dependency-reduced-pom.xml
-run_*.sh
