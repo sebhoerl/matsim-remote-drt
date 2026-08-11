@@ -40,7 +40,7 @@ for seed in 1000 2000 3000 4000 5000; do
                 if [ ! -f ${output_path}/simulation/output_events.xml.gz ]; then
                     sbatch --partition cpu --mem 12g --mincpus 12 --time 12:00:00 \
                         --job-name remote-dispatch-${name} \
-                        --qos normal_medium --partition cpu-medium \
+                        --qos low \
                         --output ${output_path}/slurm.output.log \
                         --error ${output_path}/slurm.error.log \
                         mamba run --live-stream -n dispatch \

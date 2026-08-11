@@ -8,7 +8,7 @@ fi
 
 sbatch --partition cpu --mem 12g --mincpus 1 --time 12:00:00 \
     --job-name remote-dispatch-analysis \
-    --qos normal_medium --partition cpu-medium \
+    --qos low \
     --output slurm.output.log \
     --error slurm.error.log \
     mamba run --live-stream -n dispatch \
